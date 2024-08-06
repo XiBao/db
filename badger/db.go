@@ -68,7 +68,10 @@ func (t *DB) withSpan(
 	key string,
 	fn func(ctx context.Context, span trace.Span) error,
 ) error {
-	startTime := time.Now()
+	var startTime time.Time
+	if key != "" {
+		startTime = time.Now()
+	}
 
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
