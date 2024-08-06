@@ -158,3 +158,7 @@ func (t *DB) Get(ctx context.Context, txn *badger.Txn, key []byte) (value []byte
 		})
 	return
 }
+
+func (t *DB) NewTransaction(update bool) *badger.Txn {
+	return t.db.NewTransaction(update)
+}
