@@ -21,14 +21,14 @@ import (
 var instrumName = goutil.StringsJoin(db.InstrumName, "/mysql")
 
 type DB struct {
+	db             *autorc.Conn
 	traceProvider  trace.TracerProvider
 	tracer         trace.Tracer //nolint:structcheck
 	meterProvider  metric.MeterProvider
 	meter          metric.Meter
-	attrs          []attribute.KeyValue
 	queryHistogram metric.Int64Histogram
 	queryFormatter func(query string) string
-	db             *autorc.Conn
+	attrs          []attribute.KeyValue
 }
 
 func New(ctx context.Context, host, user, passwd, db string) (*DB, error) {
