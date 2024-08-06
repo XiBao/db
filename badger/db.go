@@ -132,6 +132,15 @@ func (t *DB) Update(ctx context.Context, entry *badger.Entry) error {
 		})
 }
 
+func (t *DB) Delete(ctx context.Context, key []byte) error {
+	return t.withSpan(ctx, "db.delete", string(key),
+		func(ctx context.Context, span trace.Span) error {
+			return t.db.Update(func(txn *badger.Txn) error {
+				return txn.Delete(key)
+			})
+		})
+}
+
 func (t *DB) View(ctx context.Context, key []byte, callback func([]byte) error) error {
 	return t.withSpan(ctx, "db.view", string(key),
 		func(ctx context.Context, span trace.Span) error {
