@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/XiBao/db"
+	"github.com/XiBao/db/query"
 )
 
 var instrumName = goutil.StringsJoin(db.InstrumName, "/mysql")
@@ -64,7 +65,7 @@ func New(ctx context.Context, host, user, passwd, db string) (*DB, error) {
 }
 
 func (t *DB) EnableFingerprint() {
-	t.queryFormatter = Fingerprint
+	t.queryFormatter = query.Fingerprint
 }
 
 func (t *DB) formatQuery(query string) string {
