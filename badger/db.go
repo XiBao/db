@@ -2,10 +2,12 @@ package badger
 
 import (
 	"context"
+	"encoding/hex"
 	"time"
 
 	"github.com/XiBao/goutil"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/sugawarayuuta/charcoal"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -48,7 +50,7 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := ret.withSpan(ctx, "db.connect", "",
+	if err := ret.withSpan(ctx, "db.connect", "connect", nil,
 		func(ctx context.Context, span trace.Span) error {
 			if conn, err := badger.Open(options); err != nil {
 				return err
@@ -65,18 +67,22 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 func (t *DB) withSpan(
 	ctx context.Context,
 	spanName string,
-	key string,
+	operation string,
+	key []byte,
 	fn func(ctx context.Context, span trace.Span) error,
 ) error {
 	var startTime time.Time
-	if key != "" {
+	if key != nil {
 		startTime = time.Now()
 	}
 
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
-	if key != "" {
-		attrs = append(attrs, semconv.DBStatementKey.String(key))
+	if key != nil {
+		attrs = append(attrs, semconv.DBStatementKey.String(safeString(key)))
+	}
+	if operation != "" {
+		attrs = append(attrs, semconv.DBOperationKey.String(operation))
 	}
 
 	ctx, span := t.tracer.Start(ctx, spanName,
@@ -85,7 +91,7 @@ func (t *DB) withSpan(
 	err := fn(ctx, span)
 	defer span.End()
 
-	if key != "" {
+	if key != nil {
 		t.queryHistogram.Record(ctx, time.Since(startTime).Milliseconds(), metric.WithAttributes(t.attrs...))
 	}
 
@@ -102,7 +108,7 @@ func (t *DB) withSpan(
 }
 
 func (t *DB) GC(ctx context.Context, options *BadgerGCOptions) error {
-	return t.withSpan(ctx, "db.gc", "",
+	return t.withSpan(ctx, "db.gc", "gc", nil,
 		func(ctx context.Context, span trace.Span) error {
 			BadgerGC(ctx, options, t.db)
 			return nil
@@ -110,21 +116,21 @@ func (t *DB) GC(ctx context.Context, options *BadgerGCOptions) error {
 }
 
 func (t *DB) Close(ctx context.Context) error {
-	return t.withSpan(ctx, "db.close", "",
+	return t.withSpan(ctx, "db.close", "close", nil,
 		func(ctx context.Context, span trace.Span) error {
 			return t.db.Close()
 		})
 }
 
 func (t *DB) Commit(ctx context.Context, txn *badger.Txn) error {
-	return t.withSpan(ctx, "db.commit", "",
+	return t.withSpan(ctx, "db.commit", "commit", nil,
 		func(ctx context.Context, span trace.Span) error {
 			return txn.Commit()
 		})
 }
 
 func (t *DB) Update(ctx context.Context, entry *badger.Entry) error {
-	return t.withSpan(ctx, "db.update", string(entry.Key),
+	return t.withSpan(ctx, "db.update", "update", entry.Key,
 		func(ctx context.Context, span trace.Span) error {
 			return t.db.Update(func(txn *badger.Txn) error {
 				return txn.SetEntry(entry)
@@ -133,7 +139,7 @@ func (t *DB) Update(ctx context.Context, entry *badger.Entry) error {
 }
 
 func (t *DB) Delete(ctx context.Context, key []byte) error {
-	return t.withSpan(ctx, "db.delete", string(key),
+	return t.withSpan(ctx, "db.delete", "delete", key,
 		func(ctx context.Context, span trace.Span) error {
 			return t.db.Update(func(txn *badger.Txn) error {
 				return txn.Delete(key)
@@ -142,7 +148,7 @@ func (t *DB) Delete(ctx context.Context, key []byte) error {
 }
 
 func (t *DB) View(ctx context.Context, key []byte, callback func([]byte) error) error {
-	return t.withSpan(ctx, "db.view", string(key),
+	return t.withSpan(ctx, "db.view", "view", key,
 		func(ctx context.Context, span trace.Span) error {
 			return t.db.View(func(txn *badger.Txn) error {
 				item, err := txn.Get(key)
@@ -155,7 +161,7 @@ func (t *DB) View(ctx context.Context, key []byte, callback func([]byte) error) 
 }
 
 func (t *DB) Get(ctx context.Context, txn *badger.Txn, key []byte) (value []byte, err error) {
-	err = t.withSpan(ctx, "db.get", string(key),
+	err = t.withSpan(ctx, "db.get", "get", key,
 		func(ctx context.Context, span trace.Span) error {
 			item, err := txn.Get(key)
 			if err != nil {
@@ -173,4 +179,14 @@ func (t *DB) Get(ctx context.Context, txn *badger.Txn, key []byte) (value []byte
 
 func (t *DB) NewTransaction(update bool) *badger.Txn {
 	return t.db.NewTransaction(update)
+}
+
+func safeString(bs []byte) string {
+	if bs == nil {
+		return ""
+	}
+	if charcoal.Valid(bs) {
+		return string(bs)
+	}
+	return goutil.StringsJoin("0x", hex.EncodeToString(bs))
 }
