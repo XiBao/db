@@ -1,7 +1,7 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/XiBao/goutil v1.2.4 h1:XqcMnpk28azBaCBHey21x/VGFEQ0khKVxKdMwMnpUQg=
-github.com/XiBao/goutil v1.2.4/go.mod h1:brhZuBazi2IaD/+ObTitFzpGvD5rAUkuKKuZiqCWS6E=
+github.com/XiBao/goutil v1.2.5 h1:2aNPinpF7lb/SROyHaok9VqbE5tS45NL+tUj4CrnEHQ=
+github.com/XiBao/goutil v1.2.5/go.mod h1:JcdeYLur1qzsRpRBIq1RgD1LFpnfB+BCyloIH2UzvUc=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
