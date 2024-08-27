@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/XiBao/db"
@@ -36,15 +36,15 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 		meterProvider: otel.GetMeterProvider(),
 		attrs: []attribute.KeyValue{
 			semconv.DBSystemKey.String("badger"),
-			semconv.DBNameKey.String(options.Dir),
+			semconv.DBNamespace(options.Dir),
 		},
 	}
 	ret.tracer = ret.traceProvider.Tracer(instrumName)
 	ret.meter = ret.meterProvider.Meter(instrumName)
 	var err error
 	ret.queryHistogram, err = ret.meter.Int64Histogram(
-		"go.badger.query_timing",
-		metric.WithDescription("Timing of processed queries"),
+		semconv.DBClientOperationDurationName,
+		metric.WithDescription(semconv.DBClientOperationDurationDescription),
 		metric.WithUnit("milliseconds"),
 	)
 	if err != nil {
@@ -79,14 +79,14 @@ func (t *DB) withSpan(
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
 	if key != nil {
-		attrs = append(attrs, semconv.DBStatementKey.String(safeString(key)))
+		attrs = append(attrs, semconv.DBQueryText(safeString(key)))
 	}
 	if operation != "" {
-		attrs = append(attrs, semconv.DBOperationKey.String(operation))
+		attrs = append(attrs, semconv.DBOperationName(operation))
 	}
 
 	ctx, span := t.tracer.Start(ctx, spanName,
-		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(attrs...))
 	err := fn(ctx, span)
 	defer span.End()
