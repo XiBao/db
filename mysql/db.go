@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	semconv10 "go.opentelemetry.io/otel/semconv/v1.10.0"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 
@@ -89,7 +90,8 @@ func (t *DB) withSpan(
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
 	if query != "" {
-		attrs = append(attrs, semconv.DBQueryText(t.formatQuery(query)))
+		attrs = append(attrs, semconv10.DBStatementKey.String(t.formatQuery(query)))
+		attrs = append(attrs, semconv.DBQueryText(query))
 	}
 
 	ctx, span := t.tracer.Start(ctx, spanName,

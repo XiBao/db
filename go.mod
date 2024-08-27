@@ -3,7 +3,7 @@ module github.com/XiBao/db
 go 1.22.5
 
 require (
-	github.com/XiBao/goutil v1.2.4
+	github.com/XiBao/goutil v1.2.5
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
