@@ -9,9 +9,9 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/sugawarayuuta/charcoal v0.0.0-20240326045437-8db9433754fa
 	github.com/ziutek/mymysql v1.5.4
-	go.opentelemetry.io/otel v1.28.0
-	go.opentelemetry.io/otel/metric v1.28.0
-	go.opentelemetry.io/otel/trace v1.28.0
+	go.opentelemetry.io/otel v1.29.0
+	go.opentelemetry.io/otel/metric v1.29.0
+	go.opentelemetry.io/otel/trace v1.29.0
 )
 
 require (

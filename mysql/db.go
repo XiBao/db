@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/XiBao/db"
@@ -38,15 +38,15 @@ func New(ctx context.Context, host, user, passwd, db string) (*DB, error) {
 		meterProvider: otel.GetMeterProvider(),
 		attrs: []attribute.KeyValue{
 			semconv.DBSystemMySQL,
-			semconv.DBNameKey.String(db),
+			semconv.DBNamespace(db),
 		},
 	}
 	ret.tracer = ret.traceProvider.Tracer(instrumName)
 	ret.meter = ret.meterProvider.Meter(instrumName)
 	var err error
 	ret.queryHistogram, err = ret.meter.Int64Histogram(
-		"go.sql.query_timing",
-		metric.WithDescription("Timing of processed queries"),
+		semconv.DBClientOperationDurationName,
+		metric.WithDescription(semconv.DBClientOperationDurationDescription),
 		metric.WithUnit("milliseconds"),
 	)
 	if err != nil {
@@ -89,7 +89,7 @@ func (t *DB) withSpan(
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
 	if query != "" {
-		attrs = append(attrs, semconv.DBStatementKey.String(t.formatQuery(query)))
+		attrs = append(attrs, semconv.DBQueryText(t.formatQuery(query)))
 	}
 
 	ctx, span := t.tracer.Start(ctx, spanName,
