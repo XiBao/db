@@ -48,7 +48,7 @@ func New(ctx context.Context, host, user, passwd, db string) (*DB, error) {
 	ret.queryHistogram, err = ret.meter.Int64Histogram(
 		semconv.DBClientOperationDurationName,
 		metric.WithDescription(semconv.DBClientOperationDurationDescription),
-		metric.WithUnit("milliseconds"),
+		metric.WithUnit(semconv.DBClientOperationDurationUnit),
 	)
 	if err != nil {
 		return nil, err
