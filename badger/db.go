@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/hex"
 	"time"
+	"unicode/utf8"
 
 	"github.com/XiBao/goutil"
 	"github.com/dgraph-io/badger/v4"
-	"github.com/sugawarayuuta/charcoal"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -46,7 +46,7 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 	ret.queryHistogram, err = ret.meter.Int64Histogram(
 		semconv.DBClientOperationDurationName,
 		metric.WithDescription(semconv.DBClientOperationDurationDescription),
-		metric.WithUnit("milliseconds"),
+		metric.WithUnit(semconv.DBClientOperationDurationUnit),
 	)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func safeString(bs []byte) string {
 	if bs == nil {
 		return ""
 	}
-	if charcoal.Valid(bs) {
+	if utf8.Valid(bs) {
 		return string(bs)
 	}
 	return goutil.StringsJoin("0x", hex.EncodeToString(bs))
