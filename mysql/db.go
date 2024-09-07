@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/XiBao/goutil"
@@ -71,9 +72,9 @@ func (t *DB) EnableFingerprint() {
 
 func (t *DB) formatQuery(query string) string {
 	if t.queryFormatter != nil {
-		return t.queryFormatter(query)
+		return strings.ToValidUTF8(t.queryFormatter(query), " ")
 	}
-	return query
+	return strings.ToValidUTF8(query, " ")
 }
 
 func (t *DB) withSpan(
