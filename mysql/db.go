@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -57,7 +58,7 @@ func New(ctx context.Context, host, user, passwd, db string) (*DB, error) {
 	mysql := autorc.New("tcp", "", host, user, passwd, db)
 	mysql.Register("set names utf8mb4")
 	ret.db = mysql
-	if err = ret.withSpan(ctx, "db.Connect", "",
+	if err = ret.withSpan(ctx, "db.Connect", "", nil,
 		func(ctx context.Context, span trace.Span) error {
 			return mysql.Reconnect()
 		}); err != nil {
@@ -80,18 +81,23 @@ func (t *DB) formatQuery(query string) string {
 func (t *DB) withSpan(
 	ctx context.Context,
 	spanName string,
-	query string,
+	sql string,
+	params []interface{},
 	fn func(ctx context.Context, span trace.Span) error,
 ) error {
 	var startTime time.Time
-	if query != "" {
+	if sql != "" {
 		startTime = time.Now()
 	}
 
 	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
 	attrs = append(attrs, t.attrs...)
-	if query != "" {
-		attrs = append(attrs, semconv10.DBStatementKey.String(t.formatQuery(query)))
+	if sql != "" {
+		attrs = append(attrs, semconv10.DBStatementKey.String(t.formatQuery(sql)))
+		query := sql
+		if len(params) > 0 {
+			query = fmt.Sprintf(sql, params...)
+		}
 		attrs = append(attrs, semconv.DBQueryText(query))
 	}
 
@@ -101,7 +107,7 @@ func (t *DB) withSpan(
 	err := fn(ctx, span)
 	defer span.End()
 
-	if query != "" {
+	if sql != "" {
 		t.queryHistogram.Record(ctx, time.Since(startTime).Milliseconds(), metric.WithAttributes(t.attrs...))
 	}
 
@@ -118,7 +124,7 @@ func (t *DB) withSpan(
 }
 
 func (t *DB) Query(sql string, params ...interface{}) (rows []mysql.Row, res mysql.Result, err error) {
-	err = t.withSpan(context.TODO(), "db.Query", sql,
+	err = t.withSpan(context.TODO(), "db.Query", sql, params,
 		func(ctx context.Context, span trace.Span) error {
 			rows, res, err = t.db.Query(sql, params...)
 			if err != nil {
@@ -133,7 +139,7 @@ func (t *DB) Query(sql string, params ...interface{}) (rows []mysql.Row, res mys
 }
 
 func (t *DB) QueryCtx(ctx context.Context, sql string, params ...interface{}) (rows []mysql.Row, res mysql.Result, err error) {
-	err = t.withSpan(ctx, "db.Query", sql,
+	err = t.withSpan(ctx, "db.Query", sql, params,
 		func(ctx context.Context, span trace.Span) error {
 			rows, res, err = t.db.Query(sql, params...)
 			if err != nil {
@@ -148,7 +154,7 @@ func (t *DB) QueryCtx(ctx context.Context, sql string, params ...interface{}) (r
 }
 
 func (t *DB) QueryFirst(sql string, params ...interface{}) (row mysql.Row, res mysql.Result, err error) {
-	err = t.withSpan(context.TODO(), "db.Query", sql,
+	err = t.withSpan(context.TODO(), "db.Query", sql, params,
 		func(ctx context.Context, span trace.Span) error {
 			row, res, err = t.db.QueryFirst(sql, params...)
 			if err != nil {
@@ -163,7 +169,7 @@ func (t *DB) QueryFirst(sql string, params ...interface{}) (row mysql.Row, res m
 }
 
 func (t *DB) QueryFirstCtx(ctx context.Context, sql string, params ...interface{}) (row mysql.Row, res mysql.Result, err error) {
-	err = t.withSpan(ctx, "db.Query", sql,
+	err = t.withSpan(ctx, "db.Query", sql, params,
 		func(ctx context.Context, span trace.Span) error {
 			row, res, err = t.db.QueryFirst(sql, params...)
 			if err != nil {
