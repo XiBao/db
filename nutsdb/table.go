@@ -16,7 +16,11 @@ type Table struct {
 
 func NewTable(db *nutsdb.DB, name string, ttl uint32) (*Table, error) {
 	if err := db.Update(func(tx *nutsdb.Tx) error {
-		return tx.NewBucket(nutsdb.DataStructureBTree, name)
+		err := tx.NewBucket(nutsdb.DataStructureBTree, name)
+		if errors.Is(err, nutsdb.ErrBucketAlreadyExist) {
+			return nil
+		}
+		return err
 	}); err != nil {
 		return nil, err
 	}
@@ -61,6 +65,24 @@ func (tb *Table) Get(ctx context.Context, key []byte, fn func(val []byte) error)
 		return err
 	}
 	return nil
+}
+
+func (tb *Table) GetTTL(ctx context.Context, key []byte) (int64, error) {
+	var ttl int64
+	if err := tb.db.View(func(tx *nutsdb.Tx) error {
+		if val, err := tx.GetTTL(tb.name, key); err != nil {
+			return err
+		} else {
+			ttl = val
+			return nil
+		}
+	}); err != nil {
+		if errors.Is(err, nutsdb.ErrNotFoundKey) {
+			return 0, model.ErrNotFound
+		}
+		return 0, err
+	}
+	return ttl, nil
 }
 
 func (tb *Table) Delete(ctx context.Context, key []byte) error {
