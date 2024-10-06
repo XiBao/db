@@ -59,7 +59,7 @@ func (tb *Table) Get(ctx context.Context, key []byte, fn func(val []byte) error)
 			return fn(val)
 		}
 	}); err != nil {
-		if errors.Is(err, nutsdb.ErrNotFoundKey) {
+		if errors.Is(err, nutsdb.ErrNotFoundKey) || errors.Is(err, nutsdb.ErrKeyNotFound) {
 			return model.ErrNotFound
 		}
 		return err
@@ -77,7 +77,7 @@ func (tb *Table) GetTTL(ctx context.Context, key []byte) (int64, error) {
 			return nil
 		}
 	}); err != nil {
-		if errors.Is(err, nutsdb.ErrNotFoundKey) {
+		if errors.Is(err, nutsdb.ErrNotFoundKey) || errors.Is(err, nutsdb.ErrKeyNotFound) {
 			return 0, model.ErrNotFound
 		}
 		return 0, err
@@ -100,6 +100,9 @@ func (tb *Table) MSet(ctx context.Context, args ...[]byte) error {
 func (tb *Table) MGet(ctx context.Context, keys [][]byte, fn func(val []byte) error) error {
 	return tb.db.View(func(tx *nutsdb.Tx) error {
 		if values, err := tx.MGet(tb.name, keys...); err != nil {
+			if errors.Is(err, nutsdb.ErrNotFoundKey) || errors.Is(err, nutsdb.ErrKeyNotFound) {
+				return model.ErrNotFound
+			}
 			return err
 		} else {
 			var err error
