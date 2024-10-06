@@ -88,3 +88,25 @@ func (tb *Table) MGet(ctx context.Context, keys [][]byte, fn func(val []byte) er
 		}
 	})
 }
+
+func (tb *Table) Iterate(ctx context.Context, opt *nutsdb.IteratorOptions, fn func(key []byte, val []byte) error) error {
+	tx, err := tb.db.Begin(false)
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+	iter := nutsdb.NewIterator(tx, tb.name, *opt)
+	iter.Rewind()
+	for iter.Rewind(); iter.Valid(); iter.Next() {
+		if value, err := iter.Value(); err != nil {
+			continue
+		} else if e := fn(iter.Key(), value); e != nil {
+			if err == nil {
+				err = e
+			} else {
+				err = errors.Join(err, e)
+			}
+		}
+	}
+	return err
+}
