@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table string) error {
+func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table string, convertKey func(from []byte) []byte) error {
 	logger := zerolog.Ctx(ctx).With().Str("migrate", "badger2nuts").Str("table", table).Logger()
 	opts := badger.DefaultIteratorOptions
 	txn := from.NewTransaction(false)
@@ -35,7 +35,11 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 			}
 		}
 		if !expired {
-			key := item.Key()
+			oriKey := item.Key()
+			var key []byte
+			if convertKey != nil {
+				key = convertKey(oriKey)
+			}
 			if err := item.Value(func(val []byte) error {
 				return to.Update(func(tx *nutsdb.Tx) error {
 					return tx.Put(table, key, val, ttl)
@@ -43,11 +47,6 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 			}); err != nil {
 				return err
 			}
-			l := logger.Info().Hex("key", key).Uint32("ttl", ttl)
-			if ttl > 0 {
-				l.Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0))
-			}
-			l.Msg("transfered")
 		} else {
 			logger.Warn().Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0)).Msg("skipped")
 		}
