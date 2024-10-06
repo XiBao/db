@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table string, convertKey func(from []byte) []byte) error {
+func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table string, convertKey func(from []byte) ([]byte, error)) error {
 	logger := zerolog.Ctx(ctx).With().Str("migrate", "badger2nuts").Str("table", table).Logger()
 	opts := badger.DefaultIteratorOptions
 	txn := from.NewTransaction(false)
@@ -38,7 +38,11 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 			oriKey := item.Key()
 			var key []byte
 			if convertKey != nil {
-				key = convertKey(oriKey)
+				if k, err := convertKey(oriKey); err != nil {
+					return err
+				} else {
+					key = k
+				}
 			}
 			if err := item.Value(func(val []byte) error {
 				return to.Update(func(tx *nutsdb.Tx) error {
