@@ -27,6 +27,14 @@ func NewTable(db *nutsdb.DB, name string, ttl uint32) (*Table, error) {
 	}, nil
 }
 
+func (tb Table) Name() string {
+	return tb.name
+}
+
+func (tb Table) TTL() uint32 {
+	return tb.ttl
+}
+
 func (tb *Table) Set(ctx context.Context, key []byte, val []byte) error {
 	return tb.db.Update(func(tx *nutsdb.Tx) error {
 		return tx.Put(tb.name, key, val, tb.ttl)
