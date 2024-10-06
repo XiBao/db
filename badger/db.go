@@ -65,6 +65,10 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 	return ret, nil
 }
 
+func (t *DB) DB() *badger.DB {
+	return t.db
+}
+
 func (t *DB) withSpan(
 	ctx context.Context,
 	spanName string,
