@@ -41,6 +41,12 @@ func (tb *Table) Set(ctx context.Context, key []byte, val []byte) error {
 	})
 }
 
+func (tb *Table) Persist(ctx context.Context, key []byte, val []byte) error {
+	return tb.db.Update(func(tx *nutsdb.Tx) error {
+		return tx.Put(tb.name, key, val, nutsdb.Persistent)
+	})
+}
+
 func (tb *Table) Get(ctx context.Context, key []byte, fn func(val []byte) error) error {
 	if err := tb.db.View(func(tx *nutsdb.Tx) error {
 		if val, err := tx.Get(tb.name, key); err != nil {

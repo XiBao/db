@@ -17,20 +17,34 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 	iter := txn.NewIterator(opts)
 	defer iter.Close()
 	for iter.Rewind(); iter.Valid(); iter.Next() {
-		item := iter.Item()
-		now := uint64(time.Now().Unix())
-		ttl := item.ExpiresAt() - now
-		if ttl > 0 {
+		var (
+			item    = iter.Item()
+			now     = time.Now().Unix()
+			ttl     uint32
+			expired bool
+		)
+		if item.ExpiresAt() == 0 {
+			ttl = nutsdb.Persistent
+		} else {
+			if item.IsDeletedOrExpired() {
+				expired = true
+			} else if diff := int64(item.ExpiresAt()) - now; diff <= 0 {
+				expired = true
+			} else {
+				ttl = uint32(diff)
+			}
+		}
+		if !expired {
 			key := item.KeyCopy(nil)
 			value, _ := item.ValueCopy(nil)
 			if err := to.Update(func(tx *nutsdb.Tx) error {
-				return tx.Put(table, key, value, uint32(ttl))
+				return tx.Put(table, key, value, ttl)
 			}); err != nil {
 				return err
 			}
-			logger.Info().Hex("key", key).Hex("value", value).Uint64("ttl", ttl).Msg("transfered")
+			logger.Info().Hex("key", key).Hex("value", value).Uint32("ttl", ttl).Msg("transfered")
 		} else {
-			logger.Warn().Uint64("expires_in", ttl).Msg("skipped")
+			logger.Warn().Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0)).Msg("skipped")
 		}
 	}
 	return nil
