@@ -35,14 +35,19 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 			}
 		}
 		if !expired {
-			key := item.KeyCopy(nil)
-			value, _ := item.ValueCopy(nil)
-			if err := to.Update(func(tx *nutsdb.Tx) error {
-				return tx.Put(table, key, value, ttl)
+			key := item.Key()
+			if err := item.Value(func(val []byte) error {
+				return to.Update(func(tx *nutsdb.Tx) error {
+					return tx.Put(table, key, val, ttl)
+				})
 			}); err != nil {
 				return err
 			}
-			logger.Info().Hex("key", key).Hex("value", value).Uint32("ttl", ttl).Msg("transfered")
+			l := logger.Info().Hex("key", key).Uint32("ttl", ttl)
+			if ttl > 0 {
+				l.Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0))
+			}
+			l.Msg("transfered")
 		} else {
 			logger.Warn().Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0)).Msg("skipped")
 		}
