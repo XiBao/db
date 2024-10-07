@@ -97,6 +97,30 @@ func (tb *Table) MSet(ctx context.Context, args ...[]byte) error {
 	})
 }
 
+func (tb *Table) BatchSet(ctx context.Context, args ...[]byte) error {
+	return tb.db.Update(func(tx *nutsdb.Tx) error {
+		if len(args) == 0 {
+			return nil
+		}
+
+		if len(args)%2 != 0 {
+			return nutsdb.ErrKVArgsLenNotEven
+		}
+
+		var err error
+		for i := 0; i < len(args); i += 2 {
+			if e := tx.Put(tb.name, args[i], args[i+1], tb.ttl); e != nil {
+				if err == nil {
+					err = e
+				} else {
+					err = errors.Join(err, e)
+				}
+			}
+		}
+		return err
+	})
+}
+
 func (tb *Table) MGet(ctx context.Context, keys [][]byte, fn func(val []byte) error) error {
 	return tb.db.View(func(tx *nutsdb.Tx) error {
 		if values, err := tx.MGet(tb.name, keys...); err != nil {
