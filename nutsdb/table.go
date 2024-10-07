@@ -151,7 +151,6 @@ func (tb *Table) Iterate(ctx context.Context, opt *nutsdb.IteratorOptions, fn fu
 	}
 	defer tx.Commit()
 	iter := nutsdb.NewIterator(tx, tb.name, *opt)
-	iter.Rewind()
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		if value, err := iter.Value(); err != nil {
 			continue
