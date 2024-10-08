@@ -49,7 +49,7 @@ func Badger2Nuts(ctx context.Context, from *badger.DB, to *nutsdb.DB, table stri
 					return tx.Put(table, key, val, ttl)
 				})
 			}); err != nil {
-				logger.Error().Err(err).Str("key", string(key)).Send()
+				logger.Error().Ctx(ctx).Err(err).Str("key", string(key)).Send()
 			}
 		} else {
 			logger.Warn().Time("expires_at", time.Unix(int64(item.ExpiresAt()), 0)).Msg("skipped")

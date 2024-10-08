@@ -9,6 +9,25 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type option struct {
+	enableTracing bool
+	enableMetric  bool
+}
+
+type Option = func(opt *option)
+
+func WithTracing(enabled bool) Option {
+	return func(opt *option) {
+		opt.enableTracing = enabled
+	}
+}
+
+func WithMetric(enabled bool) Option {
+	return func(opt *option) {
+		opt.enableMetric = enabled
+	}
+}
+
 func DefaultOptions(ctx context.Context, filePath string) badger.Options {
 	opts := badger.DefaultOptions(filePath).WithLogger(NewBadgerLogger(ctx, 5))
 	opts.NumVersionsToKeep = 1
@@ -62,7 +81,7 @@ func LowMemOptions(ctx context.Context, filePath string) badger.Options {
 	opts.Compression = options.None
 	opts.DetectConflicts = false
 	// // Don't cache blocks in memory. All reads should go to disk.
-	opts.BlockCacheSize = 0
+	opts.BlockCacheSize = 10 << 20
 	return opts
 }
 
