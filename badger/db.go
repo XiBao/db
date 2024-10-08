@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/XiBao/db/model"
 	"github.com/XiBao/goutil"
 	"github.com/dgraph-io/badger/v4"
 	"go.opentelemetry.io/otel"
@@ -23,6 +24,7 @@ var instrumName = goutil.StringsJoin(db.InstrumName, "/badger")
 
 type DB struct {
 	db             *badger.DB
+	option         *option
 	traceProvider  trace.TracerProvider
 	tracer         trace.Tracer //nolint:structcheck
 	meterProvider  metric.MeterProvider
@@ -31,8 +33,9 @@ type DB struct {
 	attrs          []attribute.KeyValue
 }
 
-func New(ctx context.Context, options badger.Options) (*DB, error) {
+func New(ctx context.Context, options badger.Options, dbOptions ...Option) (*DB, error) {
 	ret := &DB{
+		option:        new(option),
 		traceProvider: otel.GetTracerProvider(),
 		meterProvider: otel.GetMeterProvider(),
 		attrs: []attribute.KeyValue{
@@ -40,19 +43,22 @@ func New(ctx context.Context, options badger.Options) (*DB, error) {
 			semconv.DBNamespace(options.Dir),
 		},
 	}
+	for _, opt := range dbOptions {
+		opt(ret.option)
+	}
 	ret.tracer = ret.traceProvider.Tracer(instrumName)
 	ret.meter = ret.meterProvider.Meter(instrumName)
-	var err error
-	ret.queryHistogram, err = ret.meter.Int64Histogram(
+	if histogram, err := ret.meter.Int64Histogram(
 		semconv.DBClientOperationDurationName,
 		metric.WithDescription(semconv.DBClientOperationDurationDescription),
 		metric.WithUnit(semconv.DBClientOperationDurationUnit),
-	)
-	if err != nil {
+	); err != nil {
 		return nil, err
+	} else {
+		ret.queryHistogram = histogram
 	}
 	if err := ret.withSpan(ctx, "db.connect", "connect", nil,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			if conn, err := badger.Open(options); err != nil {
 				return err
 			} else {
@@ -69,45 +75,57 @@ func (t *DB) DB() *badger.DB {
 	return t.db
 }
 
+func (t *DB) TracingEnabled() bool {
+	return t.option != nil && t.option.enableTracing
+}
+
+func (t *DB) MetricEnabled() bool {
+	return t.option != nil && t.option.enableMetric
+}
+
 func (t *DB) withSpan(
 	ctx context.Context,
 	spanName string,
 	operation string,
 	key []byte,
-	fn func(ctx context.Context, span trace.Span) error,
+	fn func(ctx context.Context) error,
 ) error {
-	var startTime time.Time
+	if !t.TracingEnabled() && !t.MetricEnabled() {
+		return fn(ctx)
+	}
+	var (
+		span      trace.Span
+		startTime time.Time
+	)
 	if key != nil {
 		startTime = time.Now()
 	}
 
-	attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
-	attrs = append(attrs, t.attrs...)
-	if key != nil {
-		attrs = append(attrs, semconv10.DBStatementKey.String(safeString(key)))
-		attrs = append(attrs, semconv.DBQueryText(safeString(key)))
-	}
-	if operation != "" {
-		attrs = append(attrs, semconv.DBOperationName(operation))
-	}
+	if t.TracingEnabled() {
+		attrs := make([]attribute.KeyValue, 0, len(t.attrs)+1)
+		attrs = append(attrs, t.attrs...)
+		if key != nil {
+			attrs = append(attrs, semconv10.DBStatementKey.String(safeString(key)))
+			attrs = append(attrs, semconv.DBQueryText(safeString(key)))
+		}
+		if operation != "" {
+			attrs = append(attrs, semconv.DBOperationName(operation))
+		}
 
-	ctx, span := t.tracer.Start(ctx, spanName,
-		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(attrs...))
-	err := fn(ctx, span)
-	defer span.End()
-
-	if key != nil {
-		t.queryHistogram.Record(ctx, time.Since(startTime).Milliseconds(), metric.WithAttributes(t.attrs...))
+		ctx, span = t.tracer.Start(ctx, spanName,
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(attrs...))
+		defer span.End()
 	}
+	err := fn(ctx)
 
-	if !span.IsRecording() {
-		return err
-	}
-
-	if err != nil {
+	if span != nil && span.IsRecording() && err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+	}
+
+	if key != nil && t.MetricEnabled() {
+		t.queryHistogram.Record(ctx, time.Since(startTime).Milliseconds(), metric.WithAttributes(t.attrs...))
 	}
 
 	return err
@@ -115,7 +133,7 @@ func (t *DB) withSpan(
 
 func (t *DB) GC(ctx context.Context, options *BadgerGCOptions) error {
 	return t.withSpan(ctx, "db.gc", "gc", nil,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			BadgerGC(ctx, options, t.db)
 			return nil
 		})
@@ -123,21 +141,21 @@ func (t *DB) GC(ctx context.Context, options *BadgerGCOptions) error {
 
 func (t *DB) Close(ctx context.Context) error {
 	return t.withSpan(ctx, "db.close", "close", nil,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			return t.db.Close()
 		})
 }
 
 func (t *DB) Commit(ctx context.Context, txn *badger.Txn) error {
 	return t.withSpan(ctx, "db.commit", "commit", nil,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			return txn.Commit()
 		})
 }
 
 func (t *DB) Update(ctx context.Context, entry *badger.Entry) error {
 	return t.withSpan(ctx, "db.update", "update", entry.Key,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			return t.db.Update(func(txn *badger.Txn) error {
 				return txn.SetEntry(entry)
 			})
@@ -146,7 +164,7 @@ func (t *DB) Update(ctx context.Context, entry *badger.Entry) error {
 
 func (t *DB) Delete(ctx context.Context, key []byte) error {
 	return t.withSpan(ctx, "db.delete", "delete", key,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			return t.db.Update(func(txn *badger.Txn) error {
 				return txn.Delete(key)
 			})
@@ -155,10 +173,15 @@ func (t *DB) Delete(ctx context.Context, key []byte) error {
 
 func (t *DB) View(ctx context.Context, key []byte, callback func([]byte) error) error {
 	return t.withSpan(ctx, "db.view", "view", key,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			return t.db.View(func(txn *badger.Txn) error {
 				item, err := txn.Get(key)
 				if err != nil {
+					if err == badger.ErrKeyNotFound {
+						return model.ErrNotFound
+					} else if err == badger.ErrEmptyKey {
+						return model.ErrEmptyKey
+					}
 					return err
 				}
 				return item.Value(callback)
@@ -168,9 +191,14 @@ func (t *DB) View(ctx context.Context, key []byte, callback func([]byte) error) 
 
 func (t *DB) Get(ctx context.Context, txn *badger.Txn, key []byte) (value []byte, err error) {
 	err = t.withSpan(ctx, "db.get", "get", key,
-		func(ctx context.Context, span trace.Span) error {
+		func(ctx context.Context) error {
 			item, err := txn.Get(key)
 			if err != nil {
+				if err == badger.ErrKeyNotFound {
+					return model.ErrNotFound
+				} else if err == badger.ErrEmptyKey {
+					return model.ErrEmptyKey
+				}
 				return err
 			}
 			if val, err := item.ValueCopy(nil); err != nil {
