@@ -81,7 +81,7 @@ func LowMemOptions(ctx context.Context, filePath string) badger.Options {
 	opts.Compression = options.None
 	opts.DetectConflicts = false
 	// // Don't cache blocks in memory. All reads should go to disk.
-	opts.BlockCacheSize = 10 << 20
+	opts.BlockCacheSize = 256 << 20
 	return opts
 }
 
